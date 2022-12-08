@@ -17,16 +17,14 @@ function solve(input: string) {
     return treesYX[y][x]
   }
 
-  const visibleSidesFromOutside: Record<string, string[]> = {}
-  const scenicIndexes: Record<string, number[]> = {}
+  const visibleTrees: Record<string, boolean> = {}
   let maxScenicIndex = 0
 
   for (let x = 0; x < gridWidth; x++) {
     for (let y = 0; y < gridHeight; y++) {
-      visibleSidesFromOutside[`${x},${y}`] = []
-      scenicIndexes[`${x},${y}`] = []
+      visibleTrees[`${x},${y}`] = false
       if (x === 0 || y === 0 || x === gridWidth - 1 || y === gridHeight - 1) {
-        visibleSidesFromOutside[`${x},${y}`].push('side')
+        visibleTrees[`${x},${y}`] = true
         continue
       }
 
@@ -48,17 +46,21 @@ function solve(input: string) {
       let scenicIndex = 1
 
       const config = [
-        {rangeStart: x + 1, rangeEnd: gridWidth, coordIndex: 0, name: 'right', def: gridWidth - x - 1},
-        {rangeStart: x - 1, rangeEnd: -1, coordIndex: 0, name: 'left', def: x},
-        {rangeStart: y - 1, rangeEnd: -1, coordIndex: 1, name: 'top', def: y},
-        {rangeStart: y + 1, rangeEnd: gridHeight, coordIndex: 1, name: 'bottom', def: gridHeight - y - 1},
+        // right
+        {rangeStart: x + 1, rangeEnd: gridWidth, coordIndex: 0, distance: gridWidth - x - 1},
+        // left
+        {rangeStart: x - 1, rangeEnd: -1, coordIndex: 0, distance: x},
+        // top
+        {rangeStart: y - 1, rangeEnd: -1, coordIndex: 1, distance: y},
+        // bottom
+        {rangeStart: y + 1, rangeEnd: gridHeight, coordIndex: 1, distance: gridHeight - y - 1},
       ]
 
-      config.forEach(({rangeStart, rangeEnd, coordIndex, name, def}) => {
+      config.forEach(({rangeStart, rangeEnd, coordIndex, distance}) => {
         const dist = getBlockingTreeDistance(rangeStart, rangeEnd, coordIndex)
-        scenicIndex *= dist ?? def
+        scenicIndex *= dist ?? distance
         if (dist === null) {
-          visibleSidesFromOutside[`${x},${y}`].push(name)
+          visibleTrees[`${x},${y}`] = true
         }
       })
 
@@ -69,7 +71,7 @@ function solve(input: string) {
   }
 
   return {
-    part1: Object.values(visibleSidesFromOutside).filter((arr) => arr.length !== 0).length,
+    part1: Object.values(visibleTrees).filter((visible) => visible).length,
     part2: maxScenicIndex
   }
 }
