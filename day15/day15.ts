@@ -48,13 +48,12 @@ const createDataPoints = (input: string): DataPoint[] => {
     })
 }
 
-const getFilledSegmentsForLine = (dataPoints: DataPoint[], lineNo: number): Line[] => {
 
-  return dataPoints.reduce((acc: Line[], {sensor, radius}) => {
+const analyzeHorizontalLine = (dataPoints: DataPoint[], lineNo: number) => {
+  const coveredSegments = dataPoints.reduce((acc: Line[], {sensor, radius}) => {
     const sensorDistance = Math.abs(sensor.y - lineNo)
     if (radius >= sensorDistance) {
       const overlap = radius - sensorDistance
-      // console.log(`sensor ${sensor.x},${sensor.y}, distance: ${radius}. Overlap: ${overlap}`)
       acc.push({
         from: {
           x: sensor.x - overlap,
@@ -68,84 +67,72 @@ const getFilledSegmentsForLine = (dataPoints: DataPoint[], lineNo: number): Line
     }
     return acc
   }, [])
-}
 
-const analyzeHorizontalLine = (coveredSegments: Line[], beaconMap: Record<string, boolean>, lineNo: number) => {
-  const minX = Math.min(...coveredSegments.map(({from}) => from.x))
-  const maxX = Math.max(...coveredSegments.map(({to}) => to.x))
-
-  // todo: don't loop through evertything, add segment length
-
-
-  // console.log({len:coveredSegments.length, minX, maxX})
+  coveredSegments.sort((a, b) => a.from.x - b.from.x)
   let covered = 0
-  let free: number[] = []
-  for (let i=minX; i<=maxX; i++) {
-    const coveringSegment = coveredSegments.find(({ from, to }) => from.x <= i && to.x >= i)
-    if (coveringSegment !== undefined) {
-      // check if any beacons exist there
-      // console.log(Object.keys(beaconMap))
-      if (!beaconMap[`${i},${lineNo}`]) {
-        covered++
+  const free: number[] = []
+
+  let x = coveredSegments[0].from.x
+  for (let segmentNo = 0; segmentNo < coveredSegments.length; segmentNo++) {
+    const segStart = coveredSegments[segmentNo].from.x
+    const segEnd = coveredSegments[segmentNo].to.x
+
+    // gap, adding free nodes until segment start
+    if (segStart > x && segmentNo < coveredSegments.length - 1) {
+      while (++x <= segStart -1 ) {
+        free.push(x)
       }
-    } else {
-      free.push(i)
+    }
+
+    // this new segment is already past our cursor, ignore and take next
+    if (segEnd <= x) {
+      continue
+    }
+
+    // new segment starts at or before our cursor
+    if (segStart <= x) {
+      const moveBy = segEnd - x
+      covered += moveBy
+      x += moveBy
+      continue
     }
   }
+  const minX = Math.min(...coveredSegments.map(({from}) => from.x))
+  const maxX = Math.max(...coveredSegments.map(({to}) => to.x))
   return { minX, maxX, covered, free }
 }
 
 function part1(input: string, lineNo: number) {
   const dataPoints = createDataPoints(input)
-  const beaconMap = Object.fromEntries(dataPoints.map((dp) => [`${dp.beacon.x},${dp.beacon.y}`, true]))
-  const segments = getFilledSegmentsForLine(dataPoints, lineNo)
-
-  const { covered } = analyzeHorizontalLine(segments, beaconMap, lineNo)
+  const { covered } = analyzeHorizontalLine(dataPoints, lineNo)
   return covered
 }
 
 function part2(input: string, coordMin: number, coordMax: number) {
   const dataPoints = createDataPoints(input)
-  const beaconMap = Object.fromEntries(dataPoints.map((dp) => [`${dp.beacon.x},${dp.beacon.y}`, true]))
 
-  const minX = Math.min(...dataPoints.map((dp) => dp.beacon.x - dp.radius))
-  // const minY = Math.min(...dataPoints.map((dp) => dp.beacon.y - dp.radius))
-  // const maxX = Math.max(...dataPoints.map((dp) => dp.beacon.x + dp.radius))
+  const minY = Math.min(...dataPoints.map((dp) => dp.beacon.y - dp.radius))
   const maxY = Math.max(...dataPoints.map((dp) => dp.beacon.y + dp.radius))
 
-  // const loopMaxX = Math.min(maxX, coordMax)
   const loopMaxY = Math.min(maxY, coordMax)
 
-  const loopMinX = Math.max(minX, coordMin)
-  // const loopMinY = Math.max(minY, coordMin)
+  const loopMinY = Math.max(minY, coordMin)
 
-  for (let i=loopMinX; i<=loopMaxY; i++) {
-    console.log(`${i} - ${100 * (i / (loopMaxY))}%`)
-    const segments = getFilledSegmentsForLine(dataPoints, i)
-
-    const { free } = analyzeHorizontalLine(segments, beaconMap, i)
+  for (let i=loopMinY; i<=loopMaxY; i++) {
+    const { free } = analyzeHorizontalLine(dataPoints, i)
 
     if (free.length === 1) {
-      const frequency = free[0] * 4000000 + i
-      return frequency
-    } else if (free.length > 1) {
-      console.log({free})
-      Deno.exit()
+      return free[0] * 4000000 + i
     }
   }
-
-
-
-
-
   return input
 }
 
 
 console.log('-- test input')
-// console.log({ part1: part1(testInput, 10) })
-// console.log({ part2: part2(testInput, 0, 20) })
+console.log({ part1: part1(testInput, 10) })
+console.log({ part2: part2(testInput, 0, 20) })
 
 console.log('-- real input')
-// console.log({ part1: part1(input, 2000000) })
+console.log({ part1: part1(input, 2000000) })
 console.log({ part2: part2(input, 0, 4000000) })
