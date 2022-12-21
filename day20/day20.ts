@@ -9,9 +9,9 @@ const input = Deno.readTextFileSync('./input.txt')
 
 interface ListItem {
   origValue: number
-  moved: boolean
   next?: ListItem
   prev?: ListItem
+  nextInOrder?: ListItem
 }
 const DEBUG = false
 
@@ -45,68 +45,58 @@ const moveBy = (element: ListItem, count: number) => {
   }
 }
 
-// const draw = (label: string, head: ListItem) => {
-//   const items = []
-//   for (let i=0; i<len; i++) {
-//     items.push(head.origValue)
-//     head = head.next!
-//   }
-//   console.debug(label + items.join(', '))
-// }
+const draw = (label: string, head: ListItem, len: number) => {
+  const items = []
+  for (let i=0; i<len; i++) {
+    items.push(head.origValue)
+    head = head.next!
+  }
+  console.debug(label + items.join(', '))
+}
 
 const createList = (values: number[]): ListItem[] => {
   const len = values.length
   const list: ListItem[] = values.map((origValue) => {
     return {
       origValue,
-      moved: false,
     }
   })
 
   for (let idx = 0; idx < len; idx++) {
     list[idx].prev = list[idx-1]
     list[idx].next = list[idx+1]
+    list[idx].nextInOrder = list[idx+1]
   }
   list[0].prev = list[len-1]
   list[len-1].next = list[0]
   return list
 }
 
-const mix = (list: ListItem[], head: ListItem) => {
+const mix = (list: ListItem[], head: ListItem): ListItem => {
   const len = list.length
 
-  const getFirstUnmovedElement = (): ListItem | undefined => {
-    let cursor = head
-    let i=0
-    while (i++ < len) {
-      if (!cursor.moved) {
-        return cursor
-      }
-      cursor = cursor.next!
-    }
-  }
-
-  let element = getFirstUnmovedElement()
+  let element: ListItem | undefined = head
 
   do {
     if (!element) {
       throw new Error('for compiler')
     }
 
-    element.moved = true
+    console.debug(`  > Moving ${element.origValue}`)
 
     if (element.origValue === 0) {
-      element = getFirstUnmovedElement()
+      element = element.nextInOrder
       continue
     }
 
     const prev = element.prev!
     const next = element.next!
+    console.debug(`    > Moving from between ${prev.origValue} and ${next.origValue}`)
 
     prev.next = next
     next.prev = prev
 
-    const futurePrev = moveBy(element, element.origValue)
+    const futurePrev = moveBy(element, element.origValue % (len - 1))
     const futureNext = futurePrev.next!
 
     element.next = futureNext
@@ -122,10 +112,13 @@ const mix = (list: ListItem[], head: ListItem) => {
       head = next
     }
 
-    element = getFirstUnmovedElement()
-    // draw(`  > END: `)
+    element = element.nextInOrder
+    draw(`  > END: `, head, len)
 
   } while (element)
+  draw(`> ROUND END: `, head, len)
+
+  return head
 }
 
 const getAnswer = (list: ListItem[]) => {
@@ -152,23 +145,18 @@ function part2(input: string) {
 
   const list = createList(values)
 
-  const unMix = () => list.forEach((item) => {
-    item.moved = false
-  })
-
+  const head = list[0]
   for (let mixCount = 0; mixCount < 10; mixCount++) {
-    console.log({mixCount})
-    mix(list, list[0])
-    unMix()
+    mix(list, head)
   }
 
-  return input
+  return getAnswer(list)
 }
 
 console.log('-- test input')
 console.log({ part1: part1(testInput) })
-// console.log({ part2: part2(testInput) })
+console.log({ part2: part2(testInput) })
 
 console.log('-- real input')
 console.log({ part1: part1(input) })
-// console.log({ part2: part2(input) })
+console.log({ part2: part2(input) })
