@@ -38,7 +38,7 @@ const toSnafu = (decimal: number): string => {
   const snafuDigits: string[] = `0${decimal.toString(5)}`.split('')
 
   const incrementSnafuDigit = (digit: string) => {
-    const map = {
+    const map: Record<string, string> = {
       '=': '-',
       '-': '0',
     }
@@ -75,7 +75,6 @@ const toSnafu = (decimal: number): string => {
 
   return snafuDigits.join('')
 }
-
 
 
 function solve(input: string) {
