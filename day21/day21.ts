@@ -16,130 +16,120 @@ hmdt: 32`
 
 const input = Deno.readTextFileSync('./input.txt')
 
-interface Monkey {
+type Operation = '*' | '/' | '+' | '-'
+
+interface Expression {
   name: string
-  num?: number
-  originalNum?: number
-  resolvedValue?: number
-  dep1Name?: string
-  dep2Name?: string
-  dep1?: Monkey
-  dep2?: Monkey
-  operation?: string
+  a?: string
+  b?: string
+  op?: Operation
+  value?: number
 }
 
-const performOperation = (monkey: Monkey) => {
-  switch (monkey.operation) {
-    case '+':
-      monkey.num = monkey.dep1?.num + monkey.dep2?.num
+const tryEvaluate = (expressions: Expression[], name: string): number => {
+  let replaced = true
+  while (replaced) {
+    replaced = false
+
+    const mapOfValues = Object.fromEntries(expressions
+      .filter(({ value }) => value !== undefined)
+      .map(({ name, value }) => [name, value]))
+
+    // find and evaluate any expression for which number values exist
+    const expr = expressions.find(({a, b, value}) => {
+      return value === undefined && mapOfValues[a!] !== undefined && mapOfValues[b!] !== undefined
+    })
+
+    if (expr !== undefined) {
+      replaced = true
+      expr.value = evalExpression(expr.op!, mapOfValues[expr.a!]!, mapOfValues[expr.b!]!)
+    }
+  }
+
+  const element = expressions.find((expr) => expr.name === name && expr.value !== undefined)
+  if (!element) {
+    throw new Error(`Could not resolve element ${name}`)
+  }
+  return element.value!
+}
+
+const createExpressions = (name: string, a: string, b: string, op: Operation): Expression[] => {
+  const expressions: Expression[] = []
+  expressions.push({name, op, a, b})
+  switch (op) {
+    case '+': 
+      expressions.push({ name: a, op: '-', a: name, b})
+      expressions.push({ name: b, op: '-', a: name, b: a})
       break
     case '-':
-      monkey.num = monkey.dep1?.num - monkey.dep2?.num
+      expressions.push({ name: a, op: '+', a: name, b})
+      expressions.push({ name: b, op: '-', a, b: name})
       break
     case '*':
-      monkey.num = monkey.dep1?.num * monkey.dep2?.num
+      expressions.push({ name: a, op: '/', a: name, b})
+      expressions.push({ name: b, op: '/', a: name, b: a})
       break
     case '/':
-      monkey.num = monkey.dep1?.num / monkey.dep2?.num
+      expressions.push({ name: a, op: '*', a: name, b})
+      expressions.push({ name: b, op: '/', a, b: name})
       break
-    case '=':
-      monkey.num = Number(monkey.dep1?.num === monkey.dep2?.num)
-      break
-    default:
-      throw new Error('wrong operator')
   }
+  return expressions
 }
 
-const prepMonkeys = (input: string) => {
-  const monkeys: Monkey[] = input.split(`\n`).map((line) => {
+const parseExpressions = (input: string): Expression[] => {
+  return input.split(`\n`).reduce((expressions: Expression[], line) => {
     const [name, expr] = line.split(': ')
     if (expr.match(/^\d+$/)) {
-      return ({ name, originalNum: Number(expr), num: Number(expr) })
+      expressions.push({ name, value: Number(expr) })
     } else {
-      const [_, dep1Name, operation, dep2Name] = line.match(/(\w{4}) ([*/+-]) (\w{4})/)!
-      return ({ name, dep1Name, dep2Name, operation })
+      const [_, a, op, b] = line.match(/(\w{4}) ([*/+-]) (\w{4})/)!
+      expressions.push(...createExpressions(name, a, b, op as Operation))
     }
-  })
+    return expressions
+  }, [])
+}
 
-  const monkeyMap = Object.fromEntries(monkeys.map((monkey) => [monkey.name, monkey]))
-
-  monkeys.forEach((monkey) => {
-    if (monkey.dep1Name) {
-      monkey.dep1 = monkeyMap[monkey.dep1Name]
-    }
-    if (monkey.dep2Name) {
-      monkey.dep2 = monkeyMap[monkey.dep2Name]
-    }
-  })
-  return { monkeys, monkeyMap }
+const evalExpression = (op: Operation, a: number, b: number) => {
+  if (typeof a !== 'number' || typeof b !== 'number') {
+    throw new Error('cannot eval')
+  }
+  switch (op) {
+    case '+': return a + b
+    case '-': return a - b
+    case '*': return a * b
+    case '/': return a / b
+    default: throw new Error('unsupported op')
+  }
 }
 
 function part1(input: string) {
-  const { monkeys, monkeyMap } = prepMonkeys(input)
-
-  const resetMonkeys = () => {
-    monkeys.forEach((monkey) => {
-      monkey.num = monkey.originalNum
-    })
-  }
-
-  const runLoop = () => {
-    let didChanges = false
-    while (true) {
-      didChanges = false
-      for (const monkey of monkeys) {
-        if (monkey.num === undefined && monkey.dep1?.num && monkey.dep2?.num) {
-          // console.log(` > Processsing ${monkey.name}`)
-
-          performOperation(monkey)
-          // console.log(`   > Set monkey ${monkey.name} value to ${monkey.num}`)
-          didChanges = true
-        }
-      }
-      if (!didChanges) {
-        break
-      }
-    }
-  }
-
-  runLoop()
-  const part1 = monkeyMap['root'].num
-
-
-  monkeyMap['root'].operation = '='
-
-  let i = 700_000_000
-  let part2
-  while (true) {
-    if (i % 10000 === 0) {
-      console.log(`Trying ${i}`)
-    }
-    resetMonkeys()
-    monkeyMap['humn']['num'] = i
-    runLoop()
-
-    if (monkeyMap['root'].num) {
-      part2 = i
-      break
-    }
-
-    i++
-  }
-
-
-
-  return { part1, part2 }
+  const expressions = parseExpressions(input)
+  return tryEvaluate(expressions, 'root')
 }
 
 function part2(input: string) {
-  return input
+  const expressions = parseExpressions(input)
+    .filter((expr) => !(expr.name === 'humn' && typeof expr.value === 'number'))
+
+  const rootExpr = expressions.find(({name}) => name === 'root')!
+
+
+  try {
+    const half = tryEvaluate(expressions, rootExpr.a!)
+    expressions.push({name: rootExpr.b!, value: half})
+  } catch (e) {
+    const half = tryEvaluate(expressions, rootExpr.b!)
+    expressions.push({name: rootExpr.a!, value: half})
+  }
+
+  return tryEvaluate(expressions, 'humn')
 }
 
-
 console.log('-- test input')
-// console.log({ part1: part1(testInput) })
-// console.log({ part2: part2(testInput) })
+console.log({ part1: part1(testInput) })
+console.log({ part2: part2(testInput) })
 
 console.log('-- real input')
 console.log({ part1: part1(input) })
-// console.log({ part2: part2(input) })
+console.log({ part2: part2(input) })
