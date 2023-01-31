@@ -1,0 +1,17 @@
+{
+  "imports": {
+    "graphology-shortest-path": "https://esm.sh/v104/*graphology-shortest-path@2.0.1",
+    "graphology-types": "https://esm.sh/v104/graphology-types@0.24.7",
+    "graphology": "https://esm.sh/v104/*graphology@0.25.1"
+  },
+  "scopes": {
+    "https://esm.sh/v104/": {
+      "@yomguithereal/helpers": "https://esm.sh/v104/@yomguithereal/helpers@1.1.1",
+      "events": "https://esm.sh/v104/events@3.3.0",
+      "graphology-indices": "https://esm.sh/v104/graphology-indices@0.17.0",
+      "graphology-utils": "https://esm.sh/v104/graphology-utils@2.5.2",
+      "mnemonist": "https://esm.sh/v104/mnemonist@0.39.5",
+      "obliterator": "https://esm.sh/v104/obliterator@2.0.4"
+    }
+  }
+}
