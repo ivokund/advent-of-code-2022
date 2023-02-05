@@ -21,16 +21,9 @@ type Config = Record<ValveId, {
 }>
 
 interface QueueItem {
-  history: ValveAction[]
+  pos1: ValveId
   valvesOpenedAtMinute: Record<ValveId, number>
   currentMinute: number
-}
-
-const getLastPos = (history: ValveAction[]): ValveId => {
-  if (history[history.length-1] === 'open') {
-    return history[history.length-2]
-  }
-  return history[history.length-1]
 }
 
 const parseConfig = (input: string): Config => {
@@ -47,7 +40,7 @@ const parseConfig = (input: string): Config => {
 function part1(input: string) {
   const config = parseConfig(input)
   const queue: QueueItem[] = [
-    { history: ['AA'], valvesOpenedAtMinute: {}, currentMinute: 0 }
+    { pos1: 'AA', valvesOpenedAtMinute: {}, currentMinute: 0 }
   ]
 
   let mostPressure = 0
@@ -94,10 +87,10 @@ function part1(input: string) {
     const highRateOpenValveIds = highRateValves
       .map(({id}) => id)
       .filter((id) => queueItem.valvesOpenedAtMinute[id] === undefined)
-      .filter((id) => id !== getLastPos(queueItem.history))
+      .filter((id) => id !== queueItem.pos1)
 
     const possiblePaths = highRateOpenValveIds.map((toId) => {
-      const position = getLastPos(queueItem.history)
+      const position = queueItem.pos1
       return paths[`${position}_${toId}`]
     }).filter((path) => queueItem.currentMinute + path.length -1 < 30)
       .filter((path) => path.length > 1)
@@ -105,7 +98,7 @@ function part1(input: string) {
     if (possiblePaths.length === 0 && queueItem.currentMinute < 30) {
       // wait until the end
       queue.push({
-        history: [...queueItem.history],
+        pos1: queueItem.pos1,
         valvesOpenedAtMinute: Object.assign({}, queueItem.valvesOpenedAtMinute),
         currentMinute: 30
       })
@@ -115,26 +108,20 @@ function part1(input: string) {
     possiblePaths.forEach((totalPath) => {
       const [_current, ...path] = totalPath
       const finalPosition = path[path.length - 1]
-      const newHistory = [...queueItem.history, ...path]
 
       const isNotStuck = config[finalPosition].rate > 0
       const isNotOpened = queueItem.valvesOpenedAtMinute[finalPosition] === undefined
 
       if (isNotStuck && isNotOpened) {
         // valve is closed, create a queue item where it's open
+
         queue.push({
-          history: [...newHistory, 'open'],
+          pos1: finalPosition,
           valvesOpenedAtMinute: {
             ...queueItem.valvesOpenedAtMinute,
             [finalPosition]: queueItem.currentMinute + path.length + 1
           },
           currentMinute: queueItem.currentMinute + path.length + 1
-        })
-      } else {
-        queue.push({
-          history: newHistory,
-          valvesOpenedAtMinute: Object.assign({}, queueItem.valvesOpenedAtMinute),
-          currentMinute: queueItem.currentMinute + path.length
         })
       }
     })
