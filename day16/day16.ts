@@ -14,14 +14,13 @@ Valve JJ has flow rate=21; tunnel leads to valve II`
 const input = Deno.readTextFileSync('./input.txt')
 
 type ValveId = string
-type ValveAction = ValveId | 'open'
 type Config = Record<ValveId, {
   rate: number
   to: string[]
 }>
 
 interface QueueItem {
-  pos1: ValveId
+  position: ValveId
   valvesOpenedAtMinute: Record<ValveId, number>
   currentMinute: number
 }
@@ -37,18 +36,21 @@ const parseConfig = (input: string): Config => {
   }, {})
 }
 
-function part1(input: string) {
-  const config = parseConfig(input)
+function doRuns(config: Config, maxMinutes: number) {
   const queue: QueueItem[] = [
-    { pos1: 'AA', valvesOpenedAtMinute: {}, currentMinute: 0 }
+    { position: 'AA', valvesOpenedAtMinute: {}, currentMinute: 0 }
   ]
-
-  let mostPressure = 0
 
   const highRateValves = Object.entries(config)
     .map(([id, { rate }]) => ({ id, rate }))
     .filter(({ rate }) => rate > 0)
     .sort((a, b) => b.rate - a.rate)
+
+  const bitValveMap = highRateValves.reduce((acc: Record<string,number>, valveId, index) => {
+    const num = Math.pow(2, index)
+    acc[valveId.id] = num
+    return acc
+  }, {})
 
   const graph = new Graph()
   Object.keys(config).forEach((id) => graph.addNode(id))
@@ -70,40 +72,49 @@ function part1(input: string) {
       })
   })
 
+  const createIndex = (valves: ValveId[]) => [...valves].sort().join(',')
+
+  const maxPressureByValves: Record<string,number> = {}
+
+  const handleEnd = (queueItem: QueueItem) => {
+    const totalPressure = Object.entries(queueItem.valvesOpenedAtMinute)
+      .reduce((total, [valveId, atMinute]) => {
+        return total + config[valveId].rate * (maxMinutes - atMinute )
+      }, 0)
+
+    const index = createIndex(Object.keys(queueItem.valvesOpenedAtMinute))
+    if (!maxPressureByValves[index] || maxPressureByValves[index] < totalPressure) {
+      maxPressureByValves[index] = totalPressure
+    }
+  }
+
   while (queue.length > 0) {
     const queueItem = queue.pop()!
 
-    if (queueItem.currentMinute === 30) {
-      const totalPressure = Object.entries(queueItem.valvesOpenedAtMinute)
-        .reduce((total, [valveId, atMinute]) => {
-            return total + config[valveId].rate * (30 - atMinute )
-        }, 0)
-      if (totalPressure > mostPressure) {
-        mostPressure = totalPressure
-      }
+    if (queueItem.currentMinute === maxMinutes) {
+      handleEnd(queueItem)
       continue
     }
 
     const highRateOpenValveIds = highRateValves
       .map(({id}) => id)
       .filter((id) => queueItem.valvesOpenedAtMinute[id] === undefined)
-      .filter((id) => id !== queueItem.pos1)
+      .filter((id) => id !== queueItem.position)
 
     const possiblePaths = highRateOpenValveIds.map((toId) => {
-      const position = queueItem.pos1
+      const position = queueItem.position
       return paths[`${position}_${toId}`]
-    }).filter((path) => queueItem.currentMinute + path.length -1 < 30)
+    }).filter((path) => queueItem.currentMinute + path.length -1 < maxMinutes)
       .filter((path) => path.length > 1)
 
-    if (possiblePaths.length === 0 && queueItem.currentMinute < 30) {
-      // wait until the end
-      queue.push({
-        pos1: queueItem.pos1,
-        valvesOpenedAtMinute: Object.assign({}, queueItem.valvesOpenedAtMinute),
-        currentMinute: 30
-      })
-      // no more reasonable moves to make
-    }
+    // wait in the same spot until the end, required for part 2
+    queue.push({
+      position: queueItem.position,
+      valvesOpenedAtMinute: Object.assign({}, queueItem.valvesOpenedAtMinute),
+      currentMinute: maxMinutes
+    })
+
+    let wentSomewhere = false
 
     possiblePaths.forEach((totalPath) => {
       const [_current, ...path] = totalPath
@@ -114,31 +125,64 @@ function part1(input: string) {
 
       if (isNotStuck && isNotOpened) {
         // valve is closed, create a queue item where it's open
-
+        wentSomewhere = true
         queue.push({
-          pos1: finalPosition,
+          position: finalPosition,
           valvesOpenedAtMinute: {
             ...queueItem.valvesOpenedAtMinute,
             [finalPosition]: queueItem.currentMinute + path.length + 1
           },
           currentMinute: queueItem.currentMinute + path.length + 1
         })
+      } else {
+        // move but don't open the valve
+        queue.push({
+          position: finalPosition,
+          valvesOpenedAtMinute: {...queueItem.valvesOpenedAtMinute},
+          currentMinute: queueItem.currentMinute + path.length
+        })
       }
     })
+    if (!wentSomewhere) {
+      handleEnd(queueItem)
+    }
   }
 
-  return mostPressure
+  const allRuns: { bits:number, pressure: number }[] = Object.entries(maxPressureByValves)
+    .map(([valveCsv, pressure]) => {
+      const valves = valveCsv.split(',')
+      const bits = valves.reduce((acc, valveId) => acc | bitValveMap[valveId], 0)
+      return { bits, pressure}
+    })
+
+  return allRuns
 }
 
-function part2(input: string) {
-  return input
+
+const doParts = (input: string) => {
+  const config = parseConfig(input)
+
+  const part1Runs = doRuns(config, 30)
+  const part2Runs = doRuns(config, 26)
+
+  let maxDistjointSum = 0
+  for (const r1 of part2Runs) {
+    for (const r2 of part2Runs) {
+      if ((r1.bits & r2.bits) === 0 && r1.pressure + r2.pressure > maxDistjointSum) {
+        maxDistjointSum = r1.pressure + r2.pressure
+      }
+    }
+  }
+
+  return {
+    part1: Math.max(...part1Runs.map((item) => item.pressure)),
+    part2: maxDistjointSum
+  }
 }
 
 
 console.log('-- test input')
-console.log({ part1: part1(testInput) })
-// console.log({ part2: part2(testInput) })
+console.log(doParts(testInput))
 
 console.log('-- real input')
-console.log({ part1: part1(input) })
-// console.log({ part2: part2(input) })
+console.log(doParts(input))
